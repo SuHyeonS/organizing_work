@@ -7,7 +7,7 @@ import './Aaa.css';
 
 export default function Aaa() {
   const [rows, setRows] = useState([
-    ['항목 1-1', '항목 1-2', '항목 1-3', '항목 1-4', '항목 1-5']
+    ['일자', '대분류', '업무방법', '사업주체', '내용', '연락처', '처리자']
   ]);
   const [newRows, setNewRows] = useState([]);
   const [searchInput, setSearchInput] = useState('');
