@@ -29,11 +29,6 @@ export default App;
 
 // ✅ 라우터 설정, 최상위 컴포넌트
 //🧩 화면 전체를 구성하는 기본 틀
-import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import Layout from './components/Layout';
-import Home from './pages/Home';
-import About from './pages/About';
 
 
 //<BrowserRouter>
@@ -48,13 +43,43 @@ import About from './pages/About';
 //index는 **path 없이 "기본 경로"**를 의미합니다.
 //path="/" 대신 index를 쓰면 부모 Route의 기본 자식 경로가 됩니다.
 
+
+import React, { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import Layout from './components/layout/Layout';
+import ARoutes from './routes/ARoutes';
+import BRoutes from './routes/BRoutes';
+import Login from './pages/auth/Login';
+import { initialize } from './features/auth/authSlice';
+
+function PrivateRoute({ element }) {
+  const { isLoggedIn, isInitialized } = useSelector((state) => state.auth);
+  if (!isInitialized) return <div>Loading...</div>;
+  return isLoggedIn ? element : <Navigate to="/login" replace />;
+}
+
 export default function App() {
+  const dispatch = useDispatch();
+
+  useEffect(() => {
+    const stored = localStorage.getItem('auth');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      dispatch(initialize(parsed));
+    } else {
+      dispatch(initialize({ isLoggedIn: false, username: '' }));
+    }
+  }, [dispatch]);
+
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Home />} />
-          <Route path="about" element={<About />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/" element={<PrivateRoute element={<Layout />} />}>
+          <Route index element={<Navigate to="/a" replace />} />
+          <Route path="a/*" element={<ARoutes />} />
+          <Route path="b/*" element={<BRoutes />} />
         </Route>
       </Routes>
     </BrowserRouter>
