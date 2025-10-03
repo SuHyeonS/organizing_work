@@ -4,6 +4,8 @@ import { Routes, Route, Link, Navigate } from 'react-router-dom';
 import Baa from '../pages/bbb/Baa';
 import Bbb from '../pages/bbb/Bbb';
 
+//import '../components/layout/Layout.css';
+
 export default function BRoutes() {
   return (
     <div className="section">
