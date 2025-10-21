@@ -48,10 +48,12 @@ import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import Layout from './components/layout/Layout';
-import ARoutes from './routes/ARoutes';
-import BRoutes from './routes/BRoutes';
 import Login from './pages/auth/Login';
 import { initialize } from './features/auth/authSlice';
+
+//메뉴
+import WorkRoutes from './routes/WorkRoutes';
+import AdminRoutes from './routes/AdminRoutes';
 
 function PrivateRoute({ element }) {
   const { isLoggedIn, isInitialized } = useSelector((state) => state.auth);
@@ -77,9 +79,9 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<PrivateRoute element={<Layout />} />}>
-          <Route index element={<Navigate to="/a" replace />} />
-          <Route path="a/*" element={<ARoutes />} />
-          <Route path="b/*" element={<BRoutes />} />
+          <Route index element={<Navigate to="/work" replace />} />
+          <Route path="work/*" element={<WorkRoutes />} />
+          <Route path="admin/*" element={<AdminRoutes />} />
         </Route>
       </Routes>
     </BrowserRouter>

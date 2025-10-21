@@ -17,7 +17,7 @@ export default function Header() {
   return (
     <header className="layout-header" style={{ padding: '1rem', backgroundColor: '#eee' }}>
       <nav>
-        <Link to="/a">A 메뉴</Link> | <Link to="/b">B 메뉴</Link>
+        <Link to="/work">업무관리</Link> | <Link to="/admin">관리자</Link>
         {isLoggedIn ? (
           <>
             {' '}| <span>{username}님</span>
