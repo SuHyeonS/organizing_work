@@ -13,7 +13,7 @@ export default function Login() {
     e.preventDefault();
     if (username === 'admin' && password === 'admin') {
       dispatch(login(username));
-      navigate('/a');
+      navigate('/work');
     } else {
       alert('로그인 실패');
     }
