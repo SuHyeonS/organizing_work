@@ -1,26 +1,4 @@
-/*
-import React from "react";
-import "./WorkListDetail.css"; // 모달 스타일
 
-export default function WorkListDetail({ work, onClose }) {
-  if (!work) return null; // work가 없으면 렌더링 안 함
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <h2>상세 정보</h2>
-        <p><strong>제목:</strong> {work.workTitle}</p>
-        <p><strong>요청자:</strong> {work.workRequester}</p>
-        <p><strong>요청일:</strong> {work.workRequestDate}</p>
-        <p><strong>완료일:</strong> {work.workCompletionDate}</p>
-        <p><strong>내용:</strong> {work.workContents}</p>
-        <p><strong>비고:</strong> {work.workEtc}</p>
-        <button onClick={onClose}>닫기</button>
-      </div>
-    </div>
-  );
-}
-*/
 
 //훅 
 //useState: 상태(state) 관리
@@ -38,12 +16,16 @@ export default function WorkListDetail({ work, onClose }) {
   
 
     const [searchInput, setSearchInput] = useState(""); //검색어
-    const [workList, setWorkList] = useState([]); //검색 목록
+    const [workList, setWorkList] = useState(work.subList || []); // ✅ 이미 부모에서 받은 리스트
     const [loading, setLoading] = useState(false); //로딩
 
     const [editMode, setEditMode] = useState(false); // 🔹 전체 수정 모드 여부
     const [newRows, setNewRows] = useState([]);// 새로 추가한 행들
 
+    const [showDetailModal, setShowDetailModal] = useState(false); // 모달 열림 여부
+    const [selectedWork, setSelectedWork] = useState(null);        // 클릭한 Work 객체
+
+    const [fields, setFields] = useState([]); //테이블구조
 
     //검색
     //useCallback 불필요한 재렌더링 방지, ESLint 경고 방지
@@ -67,33 +49,100 @@ export default function WorkListDetail({ work, onClose }) {
         } finally {
         setLoading(false);
         }
-    }, [searchInput]); // 최신 검색어 반영
+    }, [searchInput, work.workPk]); // 최신 검색어 반영
 
 
+    const handleDetail = async (workPk) => {
+        try {
+            setLoading(true);
 
-    // ✅ 페이지 최초 진입 시 목록 조회
-    // [getWorkListDetail] 이 함수가 바뀌면 다시 실행됩니다. (React가 권장하는 안전한 방식)
-    useEffect(() => {
-        getWorkListDetail();
-    }, [getWorkListDetail]); // ESLint 경고 없음
+            // 상세 + 하위 리스트를 동시에 요청
+            const [detailRes, subListRes] = await Promise.all([
+            axios.get(`/api/work/one?workPk=${workPk}`),
+            axios.get(`/api/work/subList?workPk=${workPk}`)
+            ]);
+
+            // 결과를 한 번에 세팅
+            setSelectedWork({
+            ...detailRes.data,
+            subList: subListRes.data
+            });
+
+            // 모든 데이터 준비 후 모달 열기
+            setShowDetailModal(true);
+        } catch (err) {
+            console.error("상세 조회 오류:", err);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     // ✅ 검색 버튼 클릭 시 실행
     const handleSearchClick = () => {
         getWorkListDetail();
     };
 
+    const mapDataTypeToFieldType = (dataType) => {
+        if (!dataType) return "text";
+        if (dataType.includes("date") || dataType.includes("timestamp")) return "date";
+        if (dataType.includes("int") || dataType.includes("number")) return "number";
+        return "text";
+    };
+        
+    const fetchFields = useCallback(async () => {
+        const tableName = "work";
+        const schemaName = "public";
+
+        try {
+        setLoading(true);
+        const res = await axios.get(`/api/work/${tableName}`, {
+            params: { tableName, schemaName }
+        });
+
+        console.log("DDL data : ", res.data);
+
+        const mappedFields = res.data
+        .filter(col => col.key && col.label) // key/label 없는 항목 제거
+        .map(col => ({
+            key: col.key,
+            label: col.label || col.key,
+            type: mapDataTypeToFieldType(col.type)
+        }));
+
+        console.log("DDL mappedFields : ", mappedFields);
+
+        setFields(mappedFields);
+        } catch (err) {
+        console.error("컬럼 정보 로딩 실패", err);
+        } finally {
+        setLoading(false);
+        }
+    }, []); // 의존성 배열이 빈 배열이면 fetchFields는 항상 같은 함수
+
+    useEffect(() => {
+        fetchFields();
+    }, [fetchFields]);
+
+  /*
     //추후 데이터로 받아올것.
-    const fields = [
+      const fields = [
         { key: "workTitle", label: "제목", type: "text" },
+        { key: "workRequestDate", label: "요청일", type: "date" },
         { key: "workRequester", label: "요청자", type: "text" },
         { key: "workPerformer", label: "수행자", type: "text" },
-        { key: "workRequestDate", label: "요청일", type: "date" },
         { key: "workCompletionDate", label: "완료일", type: "date" },
         { key: "workContents", label: "내용", type: "text" },
+        { key: "workSituation", label: "진행 상태", type: "sel" },
+        { key: "workType", label: "업무구분", type: "text" },
+        { key: "workAssortment", label: "업무종류", type: "text" },
         { key: "workEtc", label: "비고", type: "text" },
+
+        { key: "workExpectedStartDate", label: "예정일시작", type: "date" },
+        { key: "workExpectedEndDate", label: "예정일종료", type: "date" },
+        { key: "workProgressStartDate", label: "진행일시작", type: "date" },
+        { key: "workProgressEndDate", label: "진행일종료", type: "date" },
     ];
-
-
+*/
 
     // 수정 중 값 변경
     const handleChange = (index, field, value) => {
@@ -197,12 +246,9 @@ export default function WorkListDetail({ work, onClose }) {
                 {/* 좌측 */}
                 <div className="modal-left">
                     <h2>상세 정보</h2>
-                    <p><strong>제목:</strong> {work.workTitle}</p>
-                    <p><strong>요청자:</strong> {work.workRequester}</p>
-                    <p><strong>요청일:</strong> {work.workRequestDate}</p>
-                    <p><strong>완료일:</strong> {work.workCompletionDate}</p>
-                    <p><strong>내용:</strong> {work.workContents}</p>
-                    <p><strong>비고:</strong> {work.workEtc}</p>
+                    {fields.map((f) => (
+                        <p><strong>{f.label}:</strong> {work[f.key] || ""}</p>
+                    ))}
                     <button onClick={onClose}>닫기</button>
                 </div>
 
@@ -228,19 +274,20 @@ export default function WorkListDetail({ work, onClose }) {
                         </div>
 
                         {/* 테이블 컨테이너 */}
-                        <table className="work-table" style={{ width: "900px" }}>
+                        <table className="work-table" style={{ width: "90%" }}>
                             <thead>
-                            <tr style={{ background: "#dfe6e9", fontWeight: "bold" }}>
+                            <tr style={{ background: "#dfe6e9", fontWeight: "bold"}}>
                                 {/* 컬럼 헤더 */}
                                 {fields.map((f) => (
-                                <th key={f.key}>{f.label}</th>
+                                <th style={{ width: `${100 / (fields.length+2)}%` }} key={f.key}>{f.label}</th>
                                 ))}
                             </tr>
                             </thead>
 
                             <tbody>
                             {/* 기존 목록 */}
-                            {workList.map((work, index) => (
+                            {workList.length > 0 && fields.length > 0 ? (
+                                workList.map((work, index) => (
                                 <tr key={work.workPk}>
                                 {fields.map((f) => (
                                     <td key={f.key}>
@@ -256,11 +303,17 @@ export default function WorkListDetail({ work, onClose }) {
                                     )}
                                     </td>
                                 ))}
+                                <td onClick={() => handleDetail(work.workPk)} style={{ cursor: "pointer", color: "blue" }}>상세</td>
                                 <td>
                                     <button style={{ color: "red" }} onClick={() => workListDelete(work.workPk)}>삭제</button>
                                 </td>
                                 </tr>
-                            ))}
+                                ))
+                            ) : (
+                            <tr>
+                                <td colSpan={fields.length}>데이터가 없습니다.</td>
+                            </tr>
+                            )}
 
                             {/* 신규 추가 입력행 */}
                             {newRows.map((row, index) => (
@@ -290,6 +343,15 @@ export default function WorkListDetail({ work, onClose }) {
                     </table>
                 </div>
             </div>
+
+            {/* 상세 모달 */}
+            {showDetailModal && selectedWork && (
+                <WorkListDetail
+                    work={selectedWork}
+                    onClose={() => setShowDetailModal(false)}
+                />
+            )}
+
         </div>
     );
 }

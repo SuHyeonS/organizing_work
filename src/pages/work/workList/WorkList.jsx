@@ -1,3 +1,4 @@
+
 //훅 
 //useState: 상태(state) 관리
 //useEffect: 컴포넌트가 처음 실행되거나 특정 값이 바뀔 때 동작
@@ -21,6 +22,8 @@ export default function WorkList() {
 
   const [showDetailModal, setShowDetailModal] = useState(false); // 모달 열림 여부
   const [selectedWork, setSelectedWork] = useState(null);        // 클릭한 Work 객체
+
+  const [fields, setFields] = useState([]); //테이블구조
 
 
   //검색
@@ -57,17 +60,64 @@ const getWorkList = useCallback(async () => {
     getWorkList();
   };
 
+
+  const mapDataTypeToFieldType = (dataType) => {
+    if (!dataType) return "text";
+    if (dataType.includes("date") || dataType.includes("timestamp")) return "date";
+    if (dataType.includes("int") || dataType.includes("number")) return "number";
+    return "text";
+  };
+
+  
+  const fetchFields = useCallback(async () => {
+    const tableName = "work";
+    const schemaName = "public";
+
+    try {
+      setLoading(true);
+      const res = await axios.get(`/api/work/${tableName}`, {
+        params: { tableName, schemaName }
+      });
+
+      console.log("DDL data : ", res.data);
+
+      const mappedFields = res.data
+      .filter(col => col.key && col.label) // key/label 없는 항목 제거
+      .map(col => ({
+        key: col.key,
+        label: col.label || col.key,
+        type: mapDataTypeToFieldType(col.type)
+      }));
+
+      console.log("DDL mappedFields : ", mappedFields);
+
+      setFields(mappedFields);
+    } catch (err) {
+      console.error("컬럼 정보 로딩 실패", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []); // 의존성 배열이 빈 배열이면 fetchFields는 항상 같은 함수
+
+  useEffect(() => {
+    fetchFields();
+  }, [fetchFields]);
+
+  /*
  //추후 데이터로 받아올것.
   const fields = [
     { key: "workTitle", label: "제목", type: "text" },
+    { key: "workRequestDate", label: "요청일", type: "date" },
     { key: "workRequester", label: "요청자", type: "text" },
     { key: "workPerformer", label: "수행자", type: "text" },
-    { key: "workRequestDate", label: "요청일", type: "date" },
     { key: "workCompletionDate", label: "완료일", type: "date" },
     { key: "workContents", label: "내용", type: "text" },
+    { key: "workSituation", label: "진행 상태", type: "text" },
+    { key: "workType", label: "업무구분", type: "text" },
+    { key: "workAssortment", label: "업무종류", type: "text" },
     { key: "workEtc", label: "비고", type: "text" },
   ];
-
+*/
 
 
   // 수정 중 값 변경
@@ -104,7 +154,7 @@ const getWorkList = useCallback(async () => {
 
   // 전체 저장
   const handleSaveAll = async () => {
-    
+    console.log("전체 저장 : ",newRows);
     const payload = {
         updatedList: editMode ? workList : [], // 수정모드일 때만 보냄
         newList: newRows, // 신규 입력된 행
@@ -160,15 +210,29 @@ const workListDelete = async (id) => {
 
 const handleDetail = async (workPk) => {
   try {
-    const res = await axios.get(`/api/work/one?workPk=${workPk}`);
-    setSelectedWork(res.data);  // 서버에서 받아온 Work 데이터
-    //await getWorkListDetail(workData.workPk);
+    setLoading(true);
 
-    setShowDetailModal(true);   // 모달 열기
+    // 상세 + 하위 리스트를 동시에 요청
+    const [detailRes, subListRes] = await Promise.all([
+      axios.get(`/api/work/one?workPk=${workPk}`),
+      axios.get(`/api/work/subList?workPk=${workPk}`)
+    ]);
+
+    // 결과를 한 번에 세팅
+    setSelectedWork({
+      ...detailRes.data,
+      subList: subListRes.data
+    });
+
+    // 모든 데이터 준비 후 모달 열기
+    setShowDetailModal(true);
   } catch (err) {
-    console.error("상세조회 오류:", err);
+    console.error("상세 조회 오류:", err);
+  } finally {
+    setLoading(false);
   }
 };
+
 
   if (loading) return <div>로딩 중...</div>;
 
@@ -199,16 +263,23 @@ const handleDetail = async (workPk) => {
         <thead>
           <tr style={{ background: "#dfe6e9", fontWeight: "bold" }}>
             {/* 컬럼 헤더 */}
+            {fields.length > 0 ? fields.map(f => {
+               //console.log("컬럼 헤더 : ",f.key," : ",f.label)
+               return <th style={{ width: `${100 / (fields.length+2)}%` }} key={f.key}>{f.label}</th>;
+            }) : <th>Loading...</th>}
+            {/*
             {fields.map((f) => (
               <th key={f.key}>{f.label}</th>
             ))}
+            */}
             <th>상세페이지</th>
           </tr>
         </thead>
 
         <tbody>
           {/* 기존 목록 */}
-          {workList.map((work, index) => (
+          {workList.length > 0 && fields.length > 0 ? (
+            workList.map((work, index) => (
             <tr key={work.workPk}>
               {fields.map((f) => (
                 <td key={f.key}>
@@ -229,7 +300,12 @@ const handleDetail = async (workPk) => {
                 <button style={{ color: "red" }} onClick={() => workListDelete(work.workPk)}>삭제</button>
               </td>
             </tr>
-          ))}
+          ))
+        ) : (
+          <tr>
+            <td colSpan={fields.length}>데이터가 없습니다.</td>
+          </tr>
+        )}
 
           {/* 신규 추가 입력행 */}
           {newRows.map((row, index) => (
