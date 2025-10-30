@@ -5,25 +5,30 @@
 //useCallback: 함수를 메모이제이션해서 불필요한 재렌더링 방지
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios"; //서버와 통신할 때 HTTP 요청(GET, POST 등)을 보내는 라이브러리입니다.
-import "./WorkList.css";
+import "./WorkMain.css";
 
 import SearchBar from "../../../components/layout/SearchBar";
-import WorkListDetail from "./WorkListDetail";
+import WorkModal from "./WorkModal";
 
 //export default: 다른 파일에서 이 컴포넌트를 불러 쓸 수 있게 내보냅니다.
-export default function WorkList() {
+export default function WorkMain() {
 
-  const [searchInput, setSearchInput] = useState(""); //검색어
+
+  //목록
   const [workList, setWorkList] = useState([]); //검색 목록
-  const [loading, setLoading] = useState(false); //로딩
-  
   const [editMode, setEditMode] = useState(false); // 🔹 전체 수정 모드 여부
   const [newRows, setNewRows] = useState([]);// 새로 추가한 행들
 
+  //테이블구조
+  const [fields, setFields] = useState([]); 
+
+  //모달
   const [showDetailModal, setShowDetailModal] = useState(false); // 모달 열림 여부
   const [selectedWork, setSelectedWork] = useState(null);        // 클릭한 Work 객체
 
-  const [fields, setFields] = useState([]); //테이블구조
+
+  const [searchInput, setSearchInput] = useState(""); //검색어
+  const [loading, setLoading] = useState(false); //로딩
 
 
   //검색
@@ -34,7 +39,7 @@ const getWorkList = useCallback(async () => {
       setLoading(true); //로딩표시
 
       //서버호출
-      const res = await axios.get("/api/work/list", {
+      const res = await axios.get("/api/work", {
         params: { keyword: searchInput },
       });
       console.log("data:", res.data);
@@ -53,19 +58,12 @@ const getWorkList = useCallback(async () => {
   // [getWorkList] 이 함수가 바뀌면 다시 실행됩니다. (React가 권장하는 안전한 방식)
   useEffect(() => {
     getWorkList();
-  }, [getWorkList]); // ESLint 경고 없음
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // getWorkList ESLint 경고 없음 > ✅ 최초 1회만 조회
 
   // ✅ 검색 버튼 클릭 시 실행
   const handleSearchClick = () => {
     getWorkList();
-  };
-
-
-  const mapDataTypeToFieldType = (dataType) => {
-    if (!dataType) return "text";
-    if (dataType.includes("date") || dataType.includes("timestamp")) return "date";
-    if (dataType.includes("int") || dataType.includes("number")) return "number";
-    return "text";
   };
 
   
@@ -75,8 +73,8 @@ const getWorkList = useCallback(async () => {
 
     try {
       setLoading(true);
-      const res = await axios.get(`/api/work/${tableName}`, {
-        params: { tableName, schemaName }
+      const res = await axios.get(`/api/work/meta`, {
+        params: { schemaName, tableName }
       });
 
       console.log("DDL data : ", res.data);
@@ -86,7 +84,7 @@ const getWorkList = useCallback(async () => {
       .map(col => ({
         key: col.key,
         label: col.label || col.key,
-        type: mapDataTypeToFieldType(col.type)
+        type: col.type
       }));
 
       console.log("DDL mappedFields : ", mappedFields);
@@ -170,10 +168,10 @@ const getWorkList = useCallback(async () => {
     await axios.post("/api/work/saveAll", payload);
 
     alert("저장되었습니다!");
-    setEditMode(null); //수정중인행
-    setNewRows([]); 
-
-    await getWorkList(); // 🔹 단순히 재조회만
+    setNewRows([]);  //초기화
+    setEditMode(false); //수정중인행
+    getWorkList(); //갱신
+    //await getWorkList(); // 🔹 단순히 재조회만
   } catch (err) {
     console.error("저장 오류:", err);
   }
@@ -208,46 +206,68 @@ const workListDelete = async (id) => {
   }
 };
 
-const handleDetail = async (workPk) => {
-  try {
-    setLoading(true);
+//모달 갱신
+const handleDetail = async (workPk, check) => {
 
-    // 상세 + 하위 리스트를 동시에 요청
-    const [detailRes, subListRes] = await Promise.all([
-      axios.get(`/api/work/one?workPk=${workPk}`),
-      axios.get(`/api/work/subList?workPk=${workPk}`)
-    ]);
+      let id=workPk;
+      console.log("초기 id:", id, check);
+        //check : up down
+        try {
+            setLoading(true);
+            //이전 부모불러오기
+            if(check === "up"){
+                const res = await axios.get(`/api/work/${id}/parentId`);
+                console.log("Work 객체:", res.data);
 
-    // 결과를 한 번에 세팅
-    setSelectedWork({
-      ...detailRes.data,
-      subList: subListRes.data
-    });
+                // parent가 존재하면 부모 PK 사용
+                if (res.data && res.data.workPk) {
+                //if (res.data && res.data.parent && res.data.parent.workPk) {
+                    id = res.data.workPk;
+                } else {
+                    console.warn("부모가 없습니다. 현재 id 유지:", id);
+                    alert("상위 게시물이 없습니다.");
+                }
 
-    // 모든 데이터 준비 후 모달 열기
-    setShowDetailModal(true);
-  } catch (err) {
-    console.error("상세 조회 오류:", err);
-  } finally {
-    setLoading(false);
-  }
-};
+                //console.log("업데이트된 id:", id);
+                
+            }
+            console.log("업데이트된- id:", id);
+            
+            //자식불러오기
+            // 상세 + 하위 리스트를 동시에 요청
+            const [detailRes, subListRes] = await Promise.all([
+                axios.get(`/api/work/${id}`), //one
+                axios.get(`/api/work/${id}/children`) //subList
+            ]);
+
+            // 결과를 한 번에 세팅
+            setSelectedWork({
+            ...detailRes.data,
+            subList: subListRes.data
+            });
+            
+            // 모든 데이터 준비 후 모달 열기
+            setShowDetailModal(true);
+        } catch (err) {
+            console.error("상세 조회 오류:", err);
+        } finally {
+            setLoading(false);
+        }
+    };
 
 
   if (loading) return <div>로딩 중...</div>;
 
   return (
     <div>
-
       {/* 검색바 */}
       <div className="search-bar">
-        <SearchBar
+      <SearchBar
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           onSearch={handleSearchClick}
-        />
+      />
       </div>
-
       <div style={{ margin: "10px 0px 10px 0px" }}>
         <button onClick={handleAddRow}>+ 행 추가</button>
         <button onClick={() => setEditMode(!editMode)} style={{ marginLeft: "8px" }}>
@@ -336,8 +356,9 @@ const handleDetail = async (workPk) => {
       
       {/* 상세 모달 */}
       {showDetailModal && selectedWork && (
-        <WorkListDetail
+        <WorkModal
           work={selectedWork}
+          reLoad={handleDetail}
           onClose={() => setShowDetailModal(false)}
         />
       )}

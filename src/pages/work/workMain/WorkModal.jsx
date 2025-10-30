@@ -6,31 +6,35 @@
 //useCallback: 함수를 메모이제이션해서 불필요한 재렌더링 방지
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios"; //서버와 통신할 때 HTTP 요청(GET, POST 등)을 보내는 라이브러리입니다.
-import "./WorkList.css";
-import "./WorkListDetail.css"; // 모달 스타일
+import "./WorkModal.css"; // 모달 스타일
 
-import SearchBar from "../../../components/layout/SearchBar";
 
-//export default: 다른 파일에서 이 컴포넌트를 불러 쓸 수 있게 내보냅니다.
-export default function WorkListDetail({ work, onClose }) {
-  
+//export default: 다른 파일에서 이 컴포넌트를 불러 쓸 수 있게 내보냅니다. work: propsWork > work -> propsWork
+export default function WorkModal({ work: propsWork, reLoad, onClose }) {
 
-    const [searchInput, setSearchInput] = useState(""); //검색어
+    // ✅ props로 받은 work를 상태로 복사
+    const [work, setWork] = useState(propsWork || {});
+
+    //propsWork가 나중에 들어오면 useEffect가 실행됩니다. > 화면이 다시 렌더링
+    useEffect(() => {
+        setWork(propsWork || {});
+    }, [propsWork]);
+
+
     const [workList, setWorkList] = useState(work.subList || []); // ✅ 이미 부모에서 받은 리스트
     const [loading, setLoading] = useState(false); //로딩
 
     const [editMode, setEditMode] = useState(false); // 🔹 전체 수정 모드 여부
     const [newRows, setNewRows] = useState([]);// 새로 추가한 행들
 
-    const [showDetailModal, setShowDetailModal] = useState(false); // 모달 열림 여부
-    const [selectedWork, setSelectedWork] = useState(null);        // 클릭한 Work 객체
 
     const [fields, setFields] = useState([]); //테이블구조
 
-    //검색
+
+    //검색 > 부모에게 이관!!
     //useCallback 불필요한 재렌더링 방지, ESLint 경고 방지
     //async/await axios 요청이 비동기라서, 응답이 올 때까지 기다리도록 함
-    const getWorkListDetail = useCallback(async () => {
+    const getWorkModal = useCallback(async () => {
     //const getWorkListDetail = async (workPk) => {
 
         console.log("work.workPk : ", work.workPk);
@@ -38,9 +42,8 @@ export default function WorkListDetail({ work, onClose }) {
         setLoading(true); //로딩표시
 
         //서버호출
-        const res = await axios.get("/api/work/subList", {
-            params: { keyword: searchInput, workPk:work.workPk },
-        });
+        //axios.get(`/api/work/${id}/children`) //subList
+        const res = await axios.get(`/api/work/${work.workPk}/children`);
         console.log("data:", res.data);
         setWorkList(res.data); //받아온 데이터를 workList 상태에 저장
         return res; //결과 반환
@@ -49,17 +52,38 @@ export default function WorkListDetail({ work, onClose }) {
         } finally {
         setLoading(false);
         }
-    }, [searchInput, work.workPk]); // 최신 검색어 반영
+    }, [work.workPk]); // 최신 검색어 반영
 
+/*
+    const handleDetail = async (workPk, check) => {
 
-    const handleDetail = async (workPk) => {
+      let id=workPk;
+      console.log("초기 id:", id, check);
+        //check : up down
         try {
             setLoading(true);
+            //이전 부모불러오기
+            if(check === "up"){
+                const res = await axios.get(`/api/work/${id}/parentId`);
+                console.log("Work 객체:", res.data);
 
+                // parent가 존재하면 부모 PK 사용
+                if (res.data && res.data.parent && res.data.parent.workPk) {
+                    id = res.data.parent.workPk;
+                } else {
+                    console.warn("부모가 없습니다. 현재 id 유지:", id);
+                }
+
+                console.log("업데이트된 id:", id);
+                
+            }
+            
+            
+            //자식불러오기
             // 상세 + 하위 리스트를 동시에 요청
             const [detailRes, subListRes] = await Promise.all([
-            axios.get(`/api/work/one?workPk=${workPk}`),
-            axios.get(`/api/work/subList?workPk=${workPk}`)
+                axios.get(`/api/work/${id}`), //one
+                axios.get(`/api/work/${id}/children`) //subList
             ]);
 
             // 결과를 한 번에 세팅
@@ -76,12 +100,13 @@ export default function WorkListDetail({ work, onClose }) {
             setLoading(false);
         }
     };
-
+*/
+  /*
     // ✅ 검색 버튼 클릭 시 실행
     const handleSearchClick = () => {
-        getWorkListDetail();
+        getWorkModal();
     };
-
+*/
     const mapDataTypeToFieldType = (dataType) => {
         if (!dataType) return "text";
         if (dataType.includes("date") || dataType.includes("timestamp")) return "date";
@@ -95,7 +120,7 @@ export default function WorkListDetail({ work, onClose }) {
 
         try {
         setLoading(true);
-        const res = await axios.get(`/api/work/${tableName}`, {
+        const res = await axios.get(`/api/work/meta`, {
             params: { tableName, schemaName }
         });
 
@@ -200,7 +225,7 @@ export default function WorkListDetail({ work, onClose }) {
         setEditMode(null); //수정중인행
         setNewRows([]); 
 
-        await getWorkListDetail(); // 🔹 단순히 재조회만
+        await getWorkModal(); // 🔹 단순히 재조회만
     } catch (err) {
         console.error("저장 오류:", err);
     }
@@ -228,7 +253,7 @@ export default function WorkListDetail({ work, onClose }) {
     try {
         await axios.delete(`/api/work/${id}`); // DELETE 요청으로 ID 전달
         alert("삭제되었습니다!");
-        await getWorkListDetail(); // 리스트 다시 불러오기
+        await getWorkModal(); // 리스트 다시 불러오기
     } catch (err) {
         console.error("삭제 오류:", err);
         alert("삭제 중 오류가 발생했습니다.");
@@ -246,23 +271,41 @@ export default function WorkListDetail({ work, onClose }) {
                 {/* 좌측 */}
                 <div className="modal-left">
                     <h2>상세 정보</h2>
+                    <p onClick={() => reLoad(work.workPk,"up")} style={{ cursor: "pointer", color: "blue" }}>뒤로가기</p>
+
+                    <table className="work-table" style={{ width: "90%" }}>
+                        <thead>
+                            {fields.map((f) => (
+                            <tr style={{ }}>
+                                <th style={{background: "#dfe6e9", fontWeight: "500"}}>{f.label}</th>
+                                <th style={{}} key={f.key}>
+                                    <input 
+                                        type={f.type} 
+                                        value={work[f.key] || ""}
+                                        //readOnly //읽기전용
+                                        onChange={(e) =>
+                                            setWork({
+                                                ...work,
+                                                [f.key]: e.target.value, // 입력값을 상태에 반영
+                                            })}
+                                    ></input>
+                                </th>
+                            </tr>
+                            ))}
+                        </thead>
+                    </table>
+                    {/*
                     {fields.map((f) => (
                         <p><strong>{f.label}:</strong> {work[f.key] || ""}</p>
                     ))}
+                    */}
+                    <button style={{margin:"5px"}} onClick={onClose}>저장</button>
                     <button onClick={onClose}>닫기</button>
                 </div>
 
                 {/* 우측 */}
                 <div className="modal-right">
-                        {/* 검색바 */}
-                        <div className="search-bar">
-                        <SearchBar
-                            value={searchInput}
-                            onChange={(e) => setSearchInput(e.target.value)}
-                            onSearch={handleSearchClick}
-                        />
-                        </div>
-
+                        
                         <div style={{ margin: "10px 0px 10px 0px" }}>
                             <button onClick={handleAddRow}>+ 행 추가</button>
                             <button onClick={() => setEditMode(!editMode)} style={{ marginLeft: "8px" }}>
@@ -283,7 +326,7 @@ export default function WorkListDetail({ work, onClose }) {
                                 ))}
                             </tr>
                             </thead>
-
+                            
                             <tbody>
                             {/* 기존 목록 */}
                             {workList.length > 0 && fields.length > 0 ? (
@@ -303,7 +346,7 @@ export default function WorkListDetail({ work, onClose }) {
                                     )}
                                     </td>
                                 ))}
-                                <td onClick={() => handleDetail(work.workPk)} style={{ cursor: "pointer", color: "blue" }}>상세</td>
+                                <td onClick={() => reLoad(work.workPk, "down")} style={{ cursor: "pointer", color: "blue" }}>상세</td>
                                 <td>
                                     <button style={{ color: "red" }} onClick={() => workListDelete(work.workPk)}>삭제</button>
                                 </td>
@@ -343,15 +386,15 @@ export default function WorkListDetail({ work, onClose }) {
                     </table>
                 </div>
             </div>
-
-            {/* 상세 모달 */}
+            {/*
+             상세 모달 
             {showDetailModal && selectedWork && (
-                <WorkListDetail
+                <WorkModal
                     work={selectedWork}
                     onClose={() => setShowDetailModal(false)}
                 />
             )}
-
+            */}
         </div>
     );
 }
