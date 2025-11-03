@@ -19,6 +19,7 @@
   border-radius: 8px;
   
   width: 95%;
+  height: 80%;
   max-height: 90vh;             /* 화면 넘치면 스크롤 */
   overflow-y: auto;
 

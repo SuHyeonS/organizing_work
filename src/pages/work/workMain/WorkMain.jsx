@@ -3,7 +3,7 @@
 //useState: 상태(state) 관리
 //useEffect: 컴포넌트가 처음 실행되거나 특정 값이 바뀔 때 동작
 //useCallback: 함수를 메모이제이션해서 불필요한 재렌더링 방지
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios"; //서버와 통신할 때 HTTP 요청(GET, POST 등)을 보내는 라이브러리입니다.
 import "./WorkMain.css";
 
@@ -32,9 +32,9 @@ export default function WorkMain() {
 
 
   //검색
-//useCallback 불필요한 재렌더링 방지, ESLint 경고 방지
-//async/await axios 요청이 비동기라서, 응답이 올 때까지 기다리도록 함
-const getWorkList = useCallback(async () => {
+  //useCallback 불필요한 재렌더링 방지, ESLint 경고 방지
+  //async/await axios 요청이 비동기라서, 응답이 올 때까지 기다리도록 함
+  const getWorkList = useCallback(async () => {
     try {
       setLoading(true); //로딩표시
 
@@ -66,7 +66,7 @@ const getWorkList = useCallback(async () => {
     getWorkList();
   };
 
-  
+  //필드설정
   const fetchFields = useCallback(async () => {
     const tableName = "work";
     const schemaName = "public";
@@ -154,6 +154,7 @@ const getWorkList = useCallback(async () => {
   const handleSaveAll = async () => {
     console.log("전체 저장 : ",newRows);
     const payload = {
+        //workPk: {workPk:work.workPk}, // 🔹 부모 workPk 전달 > parent 객체 구조로 전달
         updatedList: editMode ? workList : [], // 수정모드일 때만 보냄
         newList: newRows, // 신규 입력된 행
       };
@@ -178,82 +179,82 @@ const getWorkList = useCallback(async () => {
 };
 
 
-// ✅ 새 행 삭제 함수
-const handleDeleteNewRow = (index) => {
-  //배열에서 특정 인덱스(index)의 요소를 제외한 나머지만 남기는 코드
-  //filter 콜백의 두 번째 매개변수 i는 인덱스(index)이고, _는 현재 값인데 안 쓸 때 _로 표시하는 관례예요
-  const updated = newRows.filter((_, i) => i !== index);  //filter false 면 남김
-  setNewRows(updated);
-};
+  // ✅ 새 행 삭제 함수
+  const handleDeleteNewRow = (index) => {
+    //배열에서 특정 인덱스(index)의 요소를 제외한 나머지만 남기는 코드
+    //filter 콜백의 두 번째 매개변수 i는 인덱스(index)이고, _는 현재 값인데 안 쓸 때 _로 표시하는 관례예요
+    const updated = newRows.filter((_, i) => i !== index);  //filter false 면 남김
+    setNewRows(updated);
+  };
 
 
-// DB 데이터 삭제
-//행위	HTTP 메서드	URL 예시	의미
-//조회	GET	/api/work/1	id가 1인 Work 조회
-//등록	POST	/api/work	새로운 Work 생성
-//수정	PUT / PATCH	/api/work/1	id가 1인 Work 수정
-//삭제	DELETE	/api/work/1	id가 1인 Work 삭제
-const workListDelete = async (id) => {
-  if (!window.confirm("정말 삭제하시겠습니까?")) return;
+  // DB 데이터 삭제
+  //행위	HTTP 메서드	URL 예시	의미
+  //조회	GET	/api/work/1	id가 1인 Work 조회
+  //등록	POST	/api/work	새로운 Work 생성
+  //수정	PUT / PATCH	/api/work/1	id가 1인 Work 수정
+  //삭제	DELETE	/api/work/1	id가 1인 Work 삭제
+  const workListDelete = async (id) => {
+    if (!window.confirm("정말 삭제하시겠습니까? \n하위목록까지 같이 삭제됩니다.")) return;
 
-  try {
-    await axios.delete(`/api/work/${id}`); // DELETE 요청으로 ID 전달
-    alert("삭제되었습니다!");
-    await getWorkList(); // 리스트 다시 불러오기
-  } catch (err) {
-    console.error("삭제 오류:", err);
-    alert("삭제 중 오류가 발생했습니다.");
-  }
-};
+    try {
+      await axios.delete(`/api/work/${id}`); // DELETE 요청으로 ID 전달
+      alert("삭제되었습니다!");
+      await getWorkList(); // 리스트 다시 불러오기
+    } catch (err) {
+      console.error("삭제 오류:", err);
+      alert("삭제 중 오류가 발생했습니다.");
+    }
+  };
 
-//모달 갱신
-const handleDetail = async (workPk, check) => {
+  
 
-      let id=workPk;
-      console.log("초기 id:", id, check);
-        //check : up down
-        try {
-            setLoading(true);
-            //이전 부모불러오기
-            if(check === "up"){
-                const res = await axios.get(`/api/work/${id}/parentId`);
-                console.log("Work 객체:", res.data);
 
-                // parent가 존재하면 부모 PK 사용
-                if (res.data && res.data.workPk) {
-                //if (res.data && res.data.parent && res.data.parent.workPk) {
-                    id = res.data.workPk;
-                } else {
-                    console.warn("부모가 없습니다. 현재 id 유지:", id);
-                    alert("상위 게시물이 없습니다.");
-                }
+  //하위목록이동
+  //saveCheckList = []; //체크한 목록
+  const saveCheckList = useRef([]);//체크한 목록
+  // 체크박스 키 저장
+  const handleCheck = (id) => {
+    if (!saveCheckList.current.includes(id)) {
+      saveCheckList.current.push(id);
+    }
+  };
+  const moveSublist = async (id) => {
+    if (!window.confirm("체크한 목록을 해당목록의 하위로 이동하시겠습니까? ")) return;
+    
+    console.log("모달 체크박스 확인 moveSublist : ", saveCheckList);
+    if(!saveCheckList.current || saveCheckList.current.length === 0){
+      alert("체크된 목록이 없습니다!");
+      return;
+    }
+    const payload = {
+        subList: saveCheckList.current, // 이관할 키 목록 > useRef 사용시 current 필수!
+        workPk: id, // 이관받을 키
+      };
+    
+    try {
+      var mge = await axios.put(`/api/work/${id}/moveChildren`, payload);
+      alert(mge.data);
+      await getWorkList(); // 리스트 다시 불러오기
+    } catch (err) {
+      console.error("이관 오류:", err);
+      alert("이관 중 오류가 발생했습니다.");
+    }
+      
+  };
 
-                //console.log("업데이트된 id:", id);
-                
-            }
-            console.log("업데이트된- id:", id);
-            
-            //자식불러오기
-            // 상세 + 하위 리스트를 동시에 요청
-            const [detailRes, subListRes] = await Promise.all([
-                axios.get(`/api/work/${id}`), //one
-                axios.get(`/api/work/${id}/children`) //subList
-            ]);
+  //모달 on
+  const openModal = (key, check) => {
+    setSelectedWork(key);
+    setShowDetailModal(check);
+  }; 
 
-            // 결과를 한 번에 세팅
-            setSelectedWork({
-            ...detailRes.data,
-            subList: subListRes.data
-            });
-            
-            // 모든 데이터 준비 후 모달 열기
-            setShowDetailModal(true);
-        } catch (err) {
-            console.error("상세 조회 오류:", err);
-        } finally {
-            setLoading(false);
-        }
-    };
+  //모달 종료시 목록 갱신
+  const onCloseModal = () => {
+    getWorkList();
+    setShowDetailModal(false);
+  };
+
 
 
   if (loading) return <div>로딩 중...</div>;
@@ -283,16 +284,19 @@ const handleDetail = async (workPk, check) => {
         <thead>
           <tr style={{ background: "#dfe6e9", fontWeight: "bold" }}>
             {/* 컬럼 헤더 */}
+            <th style={{ width: `${100 / (fields.length+4)}%` }}>하위</th>
             {fields.length > 0 ? fields.map(f => {
                //console.log("컬럼 헤더 : ",f.key," : ",f.label)
-               return <th style={{ width: `${100 / (fields.length+2)}%` }} key={f.key}>{f.label}</th>;
+               return <th style={{ width: `${100 / (fields.length+4)}%` }} key={f.key}>{f.label}</th>; //체크,상세,하위,삭제
             }) : <th>Loading...</th>}
             {/*
             {fields.map((f) => (
               <th key={f.key}>{f.label}</th>
             ))}
             */}
-            <th>상세페이지</th>
+            <th style={{ width: `${100 / (fields.length+4)}%` }}>상세목록</th>
+            <th style={{ width: `${100 / (fields.length+4)}%` }}>하위이동</th>
+            <th style={{ width: `${100 / (fields.length+4)}%` }}>삭제</th>
           </tr>
         </thead>
 
@@ -301,6 +305,9 @@ const handleDetail = async (workPk, check) => {
           {workList.length > 0 && fields.length > 0 ? (
             workList.map((work, index) => (
             <tr key={work.workPk}>
+              <td>
+                <input type="checkbox" className="input-check" onClick={() => handleCheck(work)}/>
+              </td>
               {fields.map((f) => (
                 <td key={f.key}>
                   {editMode ? (
@@ -315,7 +322,10 @@ const handleDetail = async (workPk, check) => {
                   )}
                 </td>
               ))}
-              <td onClick={() => handleDetail(work.workPk)} style={{ cursor: "pointer", color: "blue" }}>상세</td>
+              <td onClick={() => openModal(work.workPk, true)} style={{ cursor: "pointer", color: "blue" }}>상세</td>
+              <td>
+                <button style={{ color: "blue" }} onClick={() => moveSublist(work.workPk)}>하위이동</button>
+              </td>
               <td>
                 <button style={{ color: "red" }} onClick={() => workListDelete(work.workPk)}>삭제</button>
               </td>
@@ -330,6 +340,7 @@ const handleDetail = async (workPk, check) => {
           {/* 신규 추가 입력행 */}
           {newRows.map((row, index) => (
             <tr key={`new-${index}`} className="new-row">
+              <td></td>
               {fields.map((f) => (
                 <td key={f.key}>
                   <input
@@ -341,7 +352,8 @@ const handleDetail = async (workPk, check) => {
                   />
                 </td>
               ))}
-              <td></td>
+              <td></td> {/*삭제칸을 위하 */}
+              <td></td> {/*삭제칸을 위하 */}
               <td>
                 {/*
                 onClick={handleEdit(index)}처럼 쓰면, 렌더링 시점에 실행돼버리기 때문이에요.
@@ -357,9 +369,10 @@ const handleDetail = async (workPk, check) => {
       {/* 상세 모달 */}
       {showDetailModal && selectedWork && (
         <WorkModal
-          work={selectedWork}
-          reLoad={handleDetail}
-          onClose={() => setShowDetailModal(false)}
+          fields={fields} //필드
+          workPk={selectedWork} //선택자
+          onClose={ onCloseModal}
+          moveProps={{handleCheck, moveSublist, saveCheckList}}
         />
       )}
       
