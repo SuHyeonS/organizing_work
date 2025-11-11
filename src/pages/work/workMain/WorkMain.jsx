@@ -5,6 +5,9 @@
 //useCallback: 함수를 메모이제이션해서 불필요한 재렌더링 방지
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios"; //서버와 통신할 때 HTTP 요청(GET, POST 등)을 보내는 라이브러리입니다.
+
+import { useSelector } from 'react-redux'; //로그인한 user 정보
+
 import "./WorkMain.css";
 
 import SearchBar from "../../../components/layout/SearchBar";
@@ -26,6 +29,11 @@ export default function WorkMain() {
   const [showDetailModal, setShowDetailModal] = useState(false); // 모달 열림 여부
   const [selectedWork, setSelectedWork] = useState(null);        // 클릭한 Work 객체
 
+  //필드 기본값
+  //Redux store에서 로그인한 user 정보 가져오기
+  const { user, isLoggedIn } = useSelector(state => state.auth);
+  const [selectBox, setSelectBox] = useState([]); //요청자, 수행자
+  const [selInput, setSelInput] = useState([]); //진행상태, 업무구분, 업무종류
 
   const [searchInput, setSearchInput] = useState(""); //검색어
   const [loading, setLoading] = useState(false); //로딩
@@ -80,14 +88,17 @@ export default function WorkMain() {
       console.log("DDL data : ", res.data);
 
       const mappedFields = res.data
-      .filter(col => col.key && col.label) // key/label 없는 항목 제거
+
+      fetchFieldValues(mappedFields);
+      //.filter(col => col.key && col.label) // key/label 없는 항목 제거
+      /*
       .map(col => ({
         key: col.key,
         label: col.label || col.key,
         type: col.type
       }));
-
-      console.log("DDL mappedFields : ", mappedFields);
+      */
+      //console.log("DDL mappedFields : ", mappedFields);
 
       setFields(mappedFields);
     } catch (err) {
@@ -100,6 +111,57 @@ export default function WorkMain() {
   useEffect(() => {
     fetchFields();
   }, [fetchFields]);
+
+//필드값
+const fetchFieldValues = useCallback(async (mappedFields) => {
+    
+    try {
+      //setLoading(true);
+
+      let fields={};
+      if(!mappedFields){
+        const tableName = "work";
+        const schemaName = "public";
+
+        const res = await axios.get(`/api/work/meta`, {
+          params: { schemaName, tableName }
+        });
+        fields = res.data;
+      }else{
+        fields = mappedFields
+      }
+
+      //fields = res.data;
+
+      // selectBox용, selInput용 객체 초기화
+      const selectBoxData = {};
+      const selInputData = {};
+
+      // options가 있는 필드만 추출해서 key 기준으로 객체화
+      fields.forEach((f) => {
+        if (f.options && f.options.length > 0) {
+          if (f.type === "select") {
+            selectBoxData[f.key] = { options: f.options };
+          } else if (f.type === "selInput") {
+            selInputData[f.key] = { options: f.options };
+          }
+        }
+      });
+
+      console.log("옵션 필드 객체:", selectBoxData, selInputData);
+
+      // 상태 업데이트
+      setSelectBox(selectBoxData); //요청자, 수행자
+      setSelInput(selInputData); //진행상태, 업무구분, 업무종류
+      
+    } catch (err) {
+      console.error("컬럼 정보 로딩 실패", err);
+    } finally {
+      //setLoading(false);
+    }
+  }, []); // 의존성 배열이 빈 배열이면 fetchFields는 항상 같은 함수
+
+
 
   /*
  //추후 데이터로 받아올것.
@@ -128,10 +190,26 @@ export default function WorkMain() {
 
   // 새 행 추가
   const handleAddRow = () => {
+    fetchFieldValues(); //select 박스 갱신
 
      // 새 행 기본 구조 자동 생성
     const emptyRow = fields.reduce((acc, f) => {
+
+      //acc 누적값
+      //f 현재값
+
+      //console.log("????", acc, f);
       acc[f.key] = ""; // 각 key에 빈 문자열 값 설정
+
+      // 각 key에 ""빈 문자열 값 설정
+      if(f.key === "workRequestDate"){
+          acc[f.key] = TodayDate();
+      }
+        
+      if(f.key === "workPerformerSituation"){
+          acc[f.key] = user.usersName;
+      }
+
       return acc;
     }, {}); // 빈 객체에서 시작
 
@@ -255,6 +333,11 @@ export default function WorkMain() {
     setShowDetailModal(false);
   };
 
+  function TodayDate() {
+    const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+    //return <div>오늘 날짜: {today}</div>;
+    return today;
+  }
 
 
   if (loading) return <div>로딩 중...</div>;
@@ -310,13 +393,53 @@ export default function WorkMain() {
               </td>
               {fields.map((f) => (
                 <td key={f.key}>
+                  
                   {editMode ? (
-                    <input
-                      type={f.type}
-                      className="input-box"
-                      value={work[f.key] || ""}
-                      onChange={(e) => handleChange(index, f.key, e.target.value)}
-                    />
+                    <>
+                      {f.type === "select" ? (
+                        // 일반 select
+                        <select
+                          className="input-box"
+                          value={work[f.key] || ""}
+                          onChange={(e) => handleChange(index, f.key, e.target.value)}
+                        >
+                          <option value="">선택</option>
+                          {(selectBox[f.key]?.options || []).map((opt, i) => (
+                            <option key={i} value={opt.value || opt}>
+                              {opt.label || opt}
+                            </option>
+                          ))}
+                        </select>
+                      ) : f.type === "selInput" ? (
+                        // ✅ input + datalist (입력 + 자동완성 + 선택 가능)
+                        <>
+                          <input
+                            type="text"
+                            className="input-box"
+                            list={`${f.key}-list`}
+                            placeholder={f.label}
+                            value={work[f.key] || ""}
+                            onChange={(e) => handleChange(index, f.key, e.target.value)}
+                          />
+                          <datalist id={`${f.key}-list`}>
+                            {(selInput[f.key]?.options || []).map((opt, i) => (
+                              <option key={i} value={opt.value || opt}>
+                                {opt.label || opt}
+                              </option>
+                            ))}
+                          </datalist>
+                        </>
+                      ) : (
+                        // 기본 text/date
+                        <input
+                          type={f.type}
+                          className="input-box"
+                          value={work[f.key] || ""}
+                          onChange={(e) => handleChange(index, f.key, e.target.value)}
+                        />
+                      )}
+                    </>
+
                   ) : (
                     work[f.key] || "-"
                   )}
@@ -340,20 +463,56 @@ export default function WorkMain() {
           {/* 신규 추가 입력행 */}
           {newRows.map((row, index) => (
             <tr key={`new-${index}`} className="new-row">
-              <td></td>
+              <td>{/* 비워둠 */}</td>
               {fields.map((f) => (
                 <td key={f.key}>
-                  <input
-                    type={f.type}
-                    className="input-box"
-                    placeholder={f.label}
-                    value={row[f.key] || ""}
-                    onChange={(e) => handleNewChange(index, f.key, e.target.value)}
-                  />
+                  {f.type === "select" ? (
+                    // 일반 select
+                    <select
+                      className="input-box"
+                      value={row[f.key] || ""}
+                      onChange={(e) => handleNewChange(index, f.key, e.target.value)}
+                    >
+                      <option value="">선택</option>
+                      {(selectBox[f.key]?.options || []).map((opt, i) => (
+                        <option key={i} value={opt.value || opt}>
+                          {opt.label || opt}
+                        </option>
+                      ))}
+                    </select>
+                  ) : f.type === "selInput" ? (
+                    // ✅ input + datalist (입력 + 자동완성 + 선택 가능)
+                    <>
+                      <input
+                        type="text"
+                        className="input-box"
+                        list={`${f.key}-list`}
+                        placeholder={f.label}
+                        value={row[f.key]||""}
+                        onChange={(e) => handleNewChange(index, f.key, e.target.value)}
+                      />
+                      <datalist id={`${f.key}-list`}>
+                        {(selInput[f.key]?.options || []).map((opt, i) => (
+                          <option key={i} value={opt.value || opt}>
+                            {opt.label || opt}
+                          </option>
+                        ))}
+                      </datalist>
+                    </>
+                  ) : (
+                    // 기본 text/date
+                    <input
+                      type={f.type}
+                      className="input-box"
+                      placeholder={f.label}
+                      value={row[f.key] || ""}
+                      onChange={(e) => handleNewChange(index, f.key, e.target.value)}
+                    />
+                  )}
                 </td>
               ))}
-              <td></td> {/*삭제칸을 위하 */}
-              <td></td> {/*삭제칸을 위하 */}
+              <td>{/*삭제칸을 위하 */}</td> 
+              <td>{/*삭제칸을 위하 */}</td>
               <td>
                 {/*
                 onClick={handleEdit(index)}처럼 쓰면, 렌더링 시점에 실행돼버리기 때문이에요.
@@ -373,6 +532,7 @@ export default function WorkMain() {
           workPk={selectedWork} //선택자
           onClose={ onCloseModal}
           moveProps={{handleCheck, moveSublist, saveCheckList}}
+          inserLow={{TodayDate, user, fetchFieldValues, selectBox, selInput}}
         />
       )}
       

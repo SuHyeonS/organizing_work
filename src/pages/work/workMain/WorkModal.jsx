@@ -10,7 +10,7 @@ import "./WorkModal.css"; // 모달 스타일
 
 
 //export default: 다른 파일에서 이 컴포넌트를 불러 쓸 수 있게 내보냅니다. work: propsWork > work -> propsWork
-export default function WorkModal({ fields, workPk, onClose, moveProps }) {
+export default function WorkModal({ fields, workPk, onClose, moveProps, inserLow }) {
 
     //목록
     const [work, setWork] = useState(); // ✅ props로 받은 work를 상태로 복사
@@ -23,6 +23,10 @@ export default function WorkModal({ fields, workPk, onClose, moveProps }) {
     //하위 이동 기능
     const { handleCheck, moveSublist, saveCheckList } = moveProps; // ✅ 구조분해로 꺼냄
     
+    
+    //필드 기본값
+    const { TodayDate, user, fetchFieldValues, selectBox, selInput} = inserLow; // ✅ 구조분해로 꺼냄 > 로그인한 유저 정보 행추가시 자동등록
+
 /*
     //검색 > 부모에게 이관!!
     //useCallback 불필요한 재렌더링 방지, ESLint 경고 방지
@@ -149,19 +153,46 @@ export default function WorkModal({ fields, workPk, onClose, moveProps }) {
         setWorkList(updated);
     };
 
-
+    /*
     // 새 행 추가
     const handleAddRow = () => {
 
         // 새 행 기본 구조 자동 생성
         //fields.reduce()는 fields 배열을 돌면서 누적 객체(acc) 를 만듬
         const emptyRow = fields.reduce((acc, f) => {
+            
         acc[f.key] = ""; // 각 key에 빈 문자열 값 설정
         return acc;
         }, { parent: { workPk: work.workPk }}); // 초기값 셋팅
 
         setNewRows([ ...newRows,emptyRow ]);
     };
+    */
+    // 새 행 추가
+    const handleAddRow = () => {
+        fetchFieldValues(); //select 박스 갱신
+
+        // 새 행 기본 구조 자동 생성
+        //fields.reduce()는 fields 배열을 돌면서 누적 객체(acc) 를 만듬
+        const emptyRow = fields.reduce((acc, f) => {
+            acc[f.key] = ""; // 각 key에 빈 문자열 값 설정
+
+            // 각 key에 ""빈 문자열 값 설정
+            if(f.key === "workRequestDate"){
+                acc[f.key] = TodayDate();
+            }
+            
+            if(f.key === "workPerformerSituation"){
+                acc[f.key] = user.usersName;
+            }
+
+            return acc;
+        }, { parent: { workPk: work.workPk }}); // 초기값 셋팅
+
+        setNewRows([ ...newRows,emptyRow ]);
+    };
+
+
 
 
     // 새 행 값 변경
@@ -296,6 +327,68 @@ export default function WorkModal({ fields, workPk, onClose, moveProps }) {
 
                     <table className="work-table" style={{ width: "90%" }}>
                         <thead>
+
+                            {fields.map((f) => (
+                                <tr key={f.key}>
+                                    <th style={{background: "#dfe6e9", fontWeight: "500"}}>{f.label}</th>
+                                    <td style={{}} key={f.key}>
+                                        {f.type === "select" ? (
+                                            // 일반 select
+                                            <select
+                                            className="input-box"
+                                            value={work[f.key] || ""}
+                                            onChange={(e) => setWork({
+                                                ...work,            // 기존 상태 복사
+                                                [f.key]: e.target.value, // 현재 input 값 반영
+                                                })
+                                            }
+                                            >
+                                            <option value="">선택</option>
+                                            {(selectBox[f.key]?.options || []).map((opt, i) => (
+                                                <option key={i} value={opt.value || opt}>
+                                                {opt.label || opt}
+                                                </option>
+                                            ))}
+                                            </select>
+                                        ) : f.type === "selInput" ? (
+                                            // ✅ input + datalist (입력 + 자동완성 + 선택 가능)
+                                            <>
+                                            <input
+                                                type="text"
+                                                className="input-box"
+                                                list={`${f.key}-list`}
+                                                placeholder={f.label}
+                                                value={work[f.key] || ""}
+                                                onChange={(e) => setWork({
+                                                ...work,            // 기존 상태 복사
+                                                [f.key]: e.target.value, // 현재 input 값 반영
+                                                })
+                                            }
+                                            />
+                                            <datalist id={`${f.key}-list`}>
+                                                {(selInput[f.key]?.options || []).map((opt, i) => (
+                                                <option key={i} value={opt.value || opt}>
+                                                    {opt.label || opt}
+                                                </option>
+                                                ))}
+                                            </datalist>
+                                            </>
+                                        ) : (
+                                            <input
+                                            type={f.type}
+                                            className="input-box"
+                                            value={work[f.key] || ""}
+                                            onChange={(e) => setWork({
+                                                ...work,            // 기존 상태 복사
+                                                [f.key]: e.target.value, // 현재 input 값 반영
+                                                })
+                                            }
+                                            />
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                            {/*
                             {fields && fields.length > 0 && fields.map((f) => (
                             <tr key={f.key}>
                                 <th style={{background: "#dfe6e9", fontWeight: "500"}}>{f.label}</th>
@@ -313,6 +406,7 @@ export default function WorkModal({ fields, workPk, onClose, moveProps }) {
                                 </th>
                             </tr>
                             ))}
+                            */}
                         </thead>
                     </table>
                     <button style={{margin:"5px"}} onClick={workSave}>수정</button>
@@ -358,16 +452,51 @@ export default function WorkModal({ fields, workPk, onClose, moveProps }) {
                                     </td>
                                     {fields.map((f) => (
                                         <td key={f.key}>
-                                        {editMode ? (
-                                            <input
-                                            type={f.type}
-                                            className="input-box"
-                                            value={work[f.key] || ""}
-                                            onChange={(e) => handleChange(index, f.key, e.target.value)}
-                                            />
-                                        ) : (
-                                            work[f.key] || "-"
-                                        )}
+                                            {editMode ? (
+                                                f.type === "select" ? (
+                                                    // 일반 select
+                                                    <select
+                                                    className="input-box"
+                                                    value={work[f.key] || ""}
+                                                    onChange={(e) => handleChange(index, f.key, e.target.value)}
+                                                    >
+                                                    <option value="">선택</option>
+                                                    {(selectBox[f.key]?.options || []).map((opt, i) => (
+                                                        <option key={i} value={opt.value || opt}>
+                                                        {opt.label || opt}
+                                                        </option>
+                                                    ))}
+                                                    </select>
+                                                ) : f.type === "selInput" ? (
+                                                    // ✅ input + datalist (입력 + 자동완성 + 선택 가능)
+                                                    <>
+                                                    <input
+                                                        type="text"
+                                                        className="input-box"
+                                                        list={`${f.key}-list`}
+                                                        placeholder={f.label}
+                                                        value={work[f.key] || ""}
+                                                        onChange={(e) => handleChange(index, f.key, e.target.value)}
+                                                    />
+                                                    <datalist id={`${f.key}-list`}>
+                                                        {(selInput[f.key]?.options || []).map((opt, i) => (
+                                                        <option key={i} value={opt.value || opt}>
+                                                            {opt.label || opt}
+                                                        </option>
+                                                        ))}
+                                                    </datalist>
+                                                    </>
+                                                ) : (
+                                                    <input
+                                                    type={f.type}
+                                                    className="input-box"
+                                                    value={work[f.key] || ""}
+                                                    onChange={(e) => handleChange(index, f.key, e.target.value)}
+                                                    />
+                                                )
+                                            ) : (
+                                                <span>{work[f.key] || "-"}</span>
+                                            )}
                                         </td>
                                     ))}
                                     <td onClick={() => reLoad(work.workPk, "down")} style={{ cursor: "pointer", color: "blue" }}>상세</td>
@@ -391,7 +520,53 @@ export default function WorkModal({ fields, workPk, onClose, moveProps }) {
                             {/* 신규 추가 입력행 */}
                             {newRows.map((row, index) => (
                                 <tr key={`new-${index}`} className="new-row">
-                                    <td></td> {/*삭제칸을 위하 */}
+                                    <td>{/*삭제칸을 위하 */}</td>
+                                    {fields.map((f) => (
+                                        <td key={f.key}>
+                                        {f.type === "select" ? (
+                                            // 일반 select
+                                            <select
+                                            className="input-box"
+                                            value={row[f.key] || ""}
+                                            onChange={(e) => handleNewChange(index, f.key, e.target.value)}
+                                            >
+                                            <option value="">선택</option>
+                                            {(selectBox[f.key]?.options || []).map((opt, i) => (
+                                                <option key={i} value={opt.value || opt}>
+                                                {opt.label || opt}
+                                                </option>
+                                            ))}
+                                            </select>
+                                        ) : f.type === "selInput" ? (
+                                            // ✅ input + datalist (입력 + 자동완성 + 선택 가능)
+                                            <>
+                                            <input
+                                                type="text"
+                                                className="input-box"
+                                                list={`${f.key}-list`}
+                                                placeholder={f.label}
+                                                value={row[f.key]||""}
+                                                onChange={(e) => handleNewChange(index, f.key, e.target.value)}
+                                            />
+                                            <datalist id={`${f.key}-list`}>
+                                                {(selInput[f.key]?.options || []).map((opt, i) => (
+                                                <option key={i} value={opt.value || opt}>
+                                                    {opt.label || opt}
+                                                </option>
+                                                ))}
+                                            </datalist>
+                                            </>
+                                        ) : (
+                                            // 기본 text/date
+                                            <input
+                                            type={f.type}
+                                            className="input-box"
+                                            placeholder={f.label}
+                                            value={row[f.key] || ""}
+                                            onChange={(e) => handleNewChange(index, f.key, e.target.value)}
+                                            />
+                                        )}    
+                                    {/*
                                     {fields && fields.length > 0 && fields.map((f) => (
                                         <td key={f.key}>
                                         <input
@@ -401,11 +576,12 @@ export default function WorkModal({ fields, workPk, onClose, moveProps }) {
                                             value={row[f.key] || ""}
                                             onChange={(e) => handleNewChange(index, f.key, e.target.value)}
                                         />
-                                        </td>
+                                    */}
+                                    </td>
                                     ))}
-                                    <td></td> {/*삭제칸을 위하 */}
-                                    <td></td> {/*삭제칸을 위하 */}
-                                    <td></td> {/*삭제칸을 위하 */}
+                                    <td>{/*삭제칸을 위하 */}</td> 
+                                    <td>{/*삭제칸을 위하 */}</td>
+                                    <td>{/*삭제칸을 위하 */}</td>
                                     <td>
                                         {/*
                                         onClick={handleEdit(index)}처럼 쓰면, 렌더링 시점에 실행돼버리기 때문이에요.
@@ -413,8 +589,14 @@ export default function WorkModal({ fields, workPk, onClose, moveProps }) {
                                         */}
                                         <button style={{ color: "red" }} onClick={() => handleDeleteNewRow(index)}>삭제</button>
                                     </td>
-                                    <input type="hidden" value={work.workPk} name="parentWorkPk" />
+                                    {/* In HTML, whitespace text nodes cannot be a child of <tr>. Make sure you don't have any extra whitespace between tags on each line of your source code. This will cause a hydration error. */}
+                                    {/* 위 애러로 td none 태그 안에 넣음 > hidden input을 td 안에 넣고 화면에 안보이게 */}
+                                    <td style={{ display: "none" }}>
+                                        <input type="hidden" value={work.workPk} name="parentWorkPk" />
+                                    </td>
+
                                 </tr>
+                                
                             ))}
                         </tbody>
                     </table>

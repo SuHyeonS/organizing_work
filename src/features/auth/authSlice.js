@@ -1,10 +1,12 @@
 
 import { createSlice } from '@reduxjs/toolkit';
 
+//로그인 정보 저장
+
 const initialState = {
-  isLoggedIn: false,
-  username: '',
-  isInitialized: false
+  isLoggedIn: false, //로그인상태
+  user: null, // 전체 user 객체 저장
+  isInitialized: false //Redux 상태 초기화 여부를 나타냄 (앱이 시작될 때 localStorage 복원 완료 후 true
 };
 
 //sessionStorage 대신 localStorage 사용 → 새로고침 후에도 로그인 상태 유지
@@ -15,21 +17,21 @@ const authSlice = createSlice({
   name: 'auth',
   initialState,
   reducers: {
-    login: (state, action) => {
+    login: (state, action) => { //로그인
       state.isLoggedIn = true;
-      state.username = action.payload;
+      state.user = action.payload; // 전체 user 객체 저장
       state.isInitialized = true;
-      localStorage.setItem('auth', JSON.stringify({ isLoggedIn: true, username: action.payload }));
+      localStorage.setItem('auth', JSON.stringify({ isLoggedIn: true, user: action.payload }));
     },
-    logout: (state) => {
+    logout: (state) => { //로그아웃
       state.isLoggedIn = false;
-      state.username = '';
+      state.user = null;
       state.isInitialized = true;
       localStorage.removeItem('auth');
     },
-    initialize: (state, action) => {
+    initialize: (state, action) => { //앱 시작 시 localStorage에서 상태를 복원할 때 호출
       state.isLoggedIn = action.payload.isLoggedIn;
-      state.username = action.payload.username;
+      state.user = action.payload.user || null;
       state.isInitialized = true;
     }
   }

@@ -61,11 +61,13 @@ function PrivateRoute({ element }) {
   return isLoggedIn ? element : <Navigate to="/login" replace />;
 }
 
+
 export default function App() {
   const dispatch = useDispatch();
 
   useEffect(() => {
     const stored = localStorage.getItem('auth');
+    console.log("로그인 유저 : ", stored);
     if (stored) {
       const parsed = JSON.parse(stored);
       dispatch(initialize(parsed));
